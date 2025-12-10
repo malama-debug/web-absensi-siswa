@@ -1,0 +1,565 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Absensi XII TJKT 1</title>
+
+  <!-- Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    /* Minimal, elegant galaxy theme (not "jamet") */
+    :root{
+      --bg:#020114;
+      --panel: rgba(255,255,255,0.03);
+      --muted: rgba(255,255,255,0.7);
+      --accent1: #64f2ff;
+      --accent2: #a87bff;
+      --card-radius:14px;
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+    html,body{height:100%;margin:0;background:
+      radial-gradient(800px 500px at 10% 10%, rgba(100,242,255,0.04), transparent 8%),
+      radial-gradient(600px 400px at 90% 85%, rgba(168,123,255,0.03), transparent 10%),
+      var(--bg);
+      color:#e8f1ff;overflow:auto;}
+    #bgCanvas{position:fixed;left:0;top:0;width:100%;height:100%;z-index:0;pointer-events:none}
+
+    /* layout */
+    .wrap{position:relative;z-index:2;max-width:1100px;margin:28px auto;padding:18px;display:grid;grid-template-columns:360px 1fr;gap:18px}
+    header{grid-column:1/-1;display:flex;gap:14px;align-items:center}
+    .logo{width:64px;height:64px;border-radius:12px;background:linear-gradient(135deg,#0f1724,#26133b);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 30px rgba(0,0,0,0.6)}
+    h1{margin:0;font-size:22px}
+    .sub{color:var(--muted);font-size:13px;margin-top:4px}
+
+    /* left column */
+    .card{background:var(--panel);border-radius:var(--card-radius);padding:14px;border:1px solid rgba(255,255,255,0.02);box-shadow:0 8px 30px rgba(0,0,0,0.6)}
+    .camera-box{position:relative;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,0.02)}
+    video{width:100%;height:280px;object-fit:cover;background:linear-gradient(180deg,#000012,#000018)}
+    .overlay{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:68%;height:52%;border-radius:10px;border:2px dashed rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.08);font-weight:800}
+    .controls{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center}
+    select,input[type=file]{padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:#fff}
+    button{cursor:pointer;padding:9px 12px;border-radius:10px;border:0;background:linear-gradient(90deg,var(--accent1),var(--accent2));color:#041025;font-weight:700}
+    button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted)}
+
+    /* right column */
+    .dashboard{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+    .stat{padding:12px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);border:1px solid rgba(255,255,255,0.02)}
+    .stat .title{color:var(--muted);font-size:13px}
+    .stat .value{font-size:20px;font-weight:800;margin-top:8px}
+
+    .chart-card{grid-column:1/-1;padding:12px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);border:1px solid rgba(255,255,255,0.02)}
+    .history{grid-column:1/-1;margin-top:10px;padding:12px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.01), transparent);border:1px solid rgba(255,255,255,0.02);max-height:360px;overflow:auto}
+    .row{display:flex;align-items:center;justify-content:space-between;padding:8px;border-bottom:1px dashed rgba(255,255,255,0.02)}
+    .badge{padding:6px 8px;border-radius:999px;background:linear-gradient(90deg,var(--accent1),var(--accent2));color:#041025;font-weight:800}
+
+    /* modal for choose status */
+    .modal-backdrop{position:fixed;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:none;align-items:center;justify-content:center;z-index:99}
+    .modal{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:18px;border-radius:12px;width:420px;border:1px solid rgba(255,255,255,0.03)}
+    label{display:block;margin-top:8px;color:var(--muted);font-size:13px}
+    textarea{width:100%;min-height:70px;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:#fff}
+
+    /* responsive */
+    @media (max-width:980px){
+      .wrap{grid-template-columns:1fr;padding:12px}
+      .dashboard{grid-template-columns:1fr}
+    }
+
+    /* small helpers */
+    .muted{color:var(--muted);font-size:13px}
+    .tiny{font-size:12px;color:var(--muted)}
+  </style>
+</head>
+<body>
+  <canvas id="bgCanvas"></canvas>
+
+  <div class="wrap">
+    <header>
+      <div class="logo">
+        <svg width="40" height="40" viewBox="0 0 24 24"><path fill="white" d="M12 2L15 8l6 .5L17 12l2.3 6L12 15l-7.3 3L7 12 3 8.5 9 8z"/></svg>
+      </div>
+      <div>
+        <h1>Absensi XII TJKT 1</h1>
+        <div class="sub">Scan QR → Pilih Hadir / Sakit / Izin → Tersimpan (fallback gambar)</div>
+      </div>
+    </header>
+
+    <!-- LEFT: camera + controls -->
+    <div class="card">
+      <div class="camera-box">
+        <video id="video" playsinline></video>
+        <div class="overlay" id="overlay">Arahkan QR ke area ini</div>
+      </div>
+
+      <div class="controls">
+        <select id="cameraSelect"></select>
+        <button id="startBtn">Mulai</button>
+        <button id="stopBtn" class="ghost">Berhenti</button>
+        <input id="fileInput" type="file" accept="image/*" />
+      </div>
+
+      <div style="display:flex;justify-content:space-between;margin-top:10px;align-items:center">
+        <div class="tiny">Auto-scan <input type="checkbox" id="autoScan" checked /></div>
+        <div class="tiny">Auto-post <input type="checkbox" id="autoPost" /></div>
+        <div id="status" class="tiny">Status: Siap</div>
+      </div>
+
+      <div style="margin-top:12px;border-radius:10px;padding:10px;background:linear-gradient(90deg, rgba(255,255,255,0.01), transparent);border:1px solid rgba(255,255,255,0.02);">
+        <div style="font-size:13px;color:var(--muted)">Terakhir</div>
+        <div id="lastText" style="font-weight:800;font-size:16px;margin-top:6px">Belum ada</div>
+        <div id="lastMeta" class="tiny" style="margin-top:6px"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: dashboard -->
+    <div>
+      <div class="dashboard">
+        <div class="stat">
+          <div class="title">Total Hari Ini</div>
+          <div class="value" id="statTotal">0</div>
+          <div class="tiny">Tersimpan lokal • Duplikat dicegah</div>
+        </div>
+
+        <div class="stat">
+          <div class="title">Unique</div>
+          <div class="value" id="statUnique">0</div>
+          <div class="tiny">Berdasarkan QR unik</div>
+        </div>
+
+        <div class="chart-card">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <strong>Grafik Absen (7 hari)</strong>
+            <div style="display:flex;gap:8px">
+              <input id="filter" placeholder="Cari NISN/Nama/QR..." class="tiny" style="padding:8px;border-radius:8px;background:transparent;border:1px solid rgba(255,255,255,0.02);color:#fff">
+              <button id="exportCSV" class="ghost tiny">Export CSV</button>
+            </div>
+          </div>
+          <div style="margin-top:12px"><canvas id="chart" height="140"></canvas></div>
+        </div>
+
+        <div class="history">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <strong>Riwayat Pemindaian</strong>
+            <div style="display:flex;gap:8px">
+              <button id="downloadJson" class="ghost tiny">Unduh JSON</button>
+              <button id="clearAll" class="ghost tiny">Hapus Semua</button>
+            </div>
+          </div>
+          <div id="historyList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- hidden canvas for processing -->
+  <canvas id="proc" style="display:none"></canvas>
+
+  <!-- modal choose status -->
+  <div id="modal" class="modal-backdrop">
+    <div class="modal">
+      <strong id="modalTitle">Konfirmasi Absensi</strong>
+      <div id="modalStudent" class="tiny" style="margin-top:6px"></div>
+
+      <label>Pilih Status</label>
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <button id="optHadir">Hadir</button>
+        <button id="optSakit" class="ghost">Sakit</button>
+        <button id="optIzin" class="ghost">Izin</button>
+      </div>
+
+      <label id="labelReason" style="display:none">Alasan (untuk Izin)</label>
+      <textarea id="reason" placeholder="Tuliskan alasan..."></textarea>
+
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
+        <button id="cancelModal" class="ghost">Batal</button>
+        <button id="confirmModal">Simpan</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ===============================
+   Embedded student database (dari CSV Anda)
+   mapping: nisn -> name
+   =============================== */
+const studentsDB = {
+  "0073266498": "ABDILLAH ESA GILANG PRAYOGO",
+  "0088348893": "ABEL CHUSNUL HERBASXIEL",
+  "0072233963": "ADITIYA BAGUS WIDYA PRADANA",
+  "0085019803": "ADITIYA DARMA WAHYUDI",
+  "0071786456": "ADVAN DAFFA PAMUNGKAS",
+  "0074399173": "AHMAD NIZAM AL JAWAHIR",
+  "0072323672": "AILA AZURA NISRINA",
+  "0083548791": "ALIF BERGAS AJI PANGESTU",
+  "0077226450": "ALMA AULIYA AZZAHRA",
+  "0071263856": "AMALIA NORMA LIANI",
+  "0077763274": "AMIRUL MUKMININ SUNARNO",
+  "0087864013": "ANINDYA PUTRI WIBOWO",
+  "0086174361": "ANNISA NUR AZIZAH",
+"0077670053": "ARNI WAN NAZIRA",
+"0081898973": "AVRILITA AMBARASTY AL-ZAHRA",
+"0073585696": "AZIZ APRILIANTO",
+"0074872543": "BAYU ABIZARD LAZUARDI",
+"0073486774": "BILQIS FORTUNA DEWI",
+"0078530810": "BUNGA SHAFIRA ADYANI",
+"0072883247": "CENSA FAIZULHAQ",
+"0081740464": "CHELINA APRILIA MAHARANI",
+"0073448051": "DAFFAA'UDDIN AHMAD",
+"0073795310": "DENIA PUTRI KIRANA",
+"0079472932": "DESTA VIANA LORENCIA",
+"0073064533": "DEVINA AKHSANI TAQWIM PUTRI HARTOYO",
+"0074463005": "DEWA YASSER IBRAHIMOVIC",
+"0083405455": "FEBRY NURUL AINY",
+"0075043348": "FIRA YUNITA",
+"0073988148": "FITRIA NADYA KURNIAWATI",
+"0083783417": "FRENDIKA ARYA PRATAMA",
+"0088307645": "GANIS KUNTI NALIBRATA",
+"0084890868": "GRACE BRITHDAY CLAUDYA JAMI",
+"0072714833": "IVANDRA WIMA PUTRA",
+"0089471386": "JEAN KHAIRU ARDELLIA IWAI",
+"0075996449": "KEISYA AYU PRADITA",
+"0073132507": "KHAIRUNNISA PUTRI AMELIA"
+};
+/* If you want to replace or expand the DB, edit the object above. */
+
+/* ========= Elements & state ========== */
+const video = document.getElementById('video');
+const proc = document.getElementById('proc'); const pctx = proc.getContext('2d');
+const cameraSelect = document.getElementById('cameraSelect');
+const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
+const fileInput = document.getElementById('fileInput');
+const overlay = document.getElementById('overlay');
+const statusEl = document.getElementById('status');
+const lastText = document.getElementById('lastText');
+const lastMeta = document.getElementById('lastMeta');
+const historyList = document.getElementById('historyList');
+const statTotal = document.getElementById('statTotal');
+const statUnique = document.getElementById('statUnique');
+const filterInput = document.getElementById('filter');
+const exportCSV = document.getElementById('exportCSV');
+const downloadJson = document.getElementById('downloadJson');
+const clearAll = document.getElementById('clearAll');
+
+const modalBackdrop = document.getElementById('modal');
+const modalTitle = document.getElementById('modalTitle');
+const modalStudent = document.getElementById('modalStudent');
+const optHadir = document.getElementById('optHadir');
+const optSakit = document.getElementById('optSakit');
+const optIzin = document.getElementById('optIzin');
+const labelReason = document.getElementById('labelReason');
+const reasonInput = document.getElementById('reason');
+const cancelModal = document.getElementById('cancelModal');
+const confirmModal = document.getElementById('confirmModal');
+
+let stream = null;
+let scanning = false;
+let scanTimer = null;
+let deviceIdCurrent = null;
+let autoScan = document.getElementById('autoScan').checked;
+let autoPost = document.getElementById('autoPost').checked;
+
+// storage: records list
+// record: { qr, nisn (if any), name (if any), status, reason, timeISO, device, duplicate }
+let records = JSON.parse(localStorage.getItem('absensi_records_v1') || '[]');
+let dailyKeys = new Set(JSON.parse(localStorage.getItem('absensi_keys_v1') || '[]'));
+
+/* ===== helpers ===== */
+function saveState(){
+  localStorage.setItem('absensi_records_v1', JSON.stringify(records));
+  localStorage.setItem('absensi_keys_v1', JSON.stringify(Array.from(dailyKeys)));
+}
+function humanTime(iso){ return new Date(iso).toLocaleString(); }
+function todayKey(qr){ return qr + '|' + (new Date()).toDateString(); }
+
+/* ===== camera list & start/stop ===== */
+async function listCameras(){
+  try{
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const cams = devices.filter(d=>d.kind==='videoinput');
+    cameraSelect.innerHTML = '';
+    cams.forEach((c,i)=>{
+      const opt=document.createElement('option'); opt.value=c.deviceId; opt.textContent=c.label || `Camera ${i+1}`; cameraSelect.appendChild(opt);
+    });
+    if(cams.length) cameraSelect.value = cams[0].deviceId;
+  }catch(e){ console.warn('listCameras',e); }
+}
+
+async function startCamera(deviceId){
+  stopCamera();
+  try{
+    const constraints = { audio:false, video:{ deviceId: deviceId ? { exact: deviceId } : undefined, facingMode: "environment", width:{ ideal:1280 }, height:{ ideal:720 } } };
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    video.srcObject = stream;
+    await video.play();
+    scanning = true;
+    deviceIdCurrent = deviceId;
+    statusEl.textContent = 'Memindai...';
+    scanLoop();
+  }catch(e){
+    alert('Gagal akses kamera. Pastikan Anda membuka lewat HTTPS atau localhost.\nPesan: ' + (e.message||e));
+    statusEl.textContent = 'Gagal kamera';
+  }
+}
+
+function stopCamera(){
+  scanning = false;
+  if(stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
+  if(scanTimer) clearTimeout(scanTimer);
+  video.pause();
+  statusEl.textContent = 'Berhenti';
+}
+
+/* ===== scan loop using jsQR ===== */
+function scanLoop(){
+  if(!scanning) return;
+  if(video.readyState === video.HAVE_ENOUGH_DATA){
+    proc.width = video.videoWidth; proc.height = video.videoHeight;
+    pctx.drawImage(video,0,0,proc.width,proc.height);
+    const imageData = pctx.getImageData(0,0,proc.width,proc.height);
+    const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "attemptBoth" });
+    if(code){
+      overlay.textContent = 'QR terdeteksi';
+      flashOverlay();
+      const qrText = code.data.trim();
+      if(document.getElementById('autoScan').checked){
+        onDetected(qrText);
+        scanning = false; // short pause to avoid duplicates within frames
+        setTimeout(()=>scanning = true, 800);
+      } else {
+        lastText.textContent = qrText;
+        lastMeta.textContent = new Date().toLocaleString();
+      }
+    } else {
+      overlay.textContent = 'Arahkan QR ke area ini';
+    }
+  }
+  scanTimer = setTimeout(()=>requestAnimationFrame(scanLoop), 120);
+}
+
+function flashOverlay(){
+  overlay.style.boxShadow = "0 0 30px rgba(100,242,255,0.12)";
+  setTimeout(()=>overlay.style.boxShadow = "none", 250);
+}
+
+/* ===== handle detection: show modal to choose status ===== */
+let currentDetection = null;
+function onDetected(qrText, source='camera'){
+  currentDetection = { qr: qrText, device: source };
+  // lookup student
+  let nisn = null, name = null;
+  if(studentsDB[qrText]){
+    nisn = qrText; name = studentsDB[qrText];
+  } else {
+    // maybe qrText contains nisn|name or is full text -> try to parse numeric prefix
+    const maybe = qrText.trim().split(/\s+/)[0];
+    if(studentsDB[maybe]){ nisn = maybe; name = studentsDB[maybe]; }
+  }
+  modalTitle.textContent = 'Konfirmasi Absensi';
+  modalStudent.textContent = (nisn ? `${nisn} • ${name}` : qrText);
+  reasonInput.value = '';
+  labelReason.style.display = 'none';
+  reasonInput.style.display = 'none';
+  // show modal
+  modalBackdrop.style.display = 'flex';
+  // set default selected state style
+  [optHadir,optSakit,optIzin].forEach(b=>b.classList.remove('active'));
+  optHadir.classList.add('active');
+}
+
+/* modal buttons */
+optHadir.addEventListener('click', ()=>{
+  [optHadir,optSakit,optIzin].forEach(b=>b.classList.remove('active'));
+  optHadir.classList.add('active');
+  labelReason.style.display='none'; reasonInput.style.display='none';
+});
+optSakit.addEventListener('click', ()=>{
+  [optHadir,optSakit,optIzin].forEach(b=>b.classList.remove('active'));
+  optSakit.classList.add('active');
+  labelReason.style.display='none'; reasonInput.style.display='none';
+});
+optIzin.addEventListener('click', ()=>{
+  [optHadir,optSakit,optIzin].forEach(b=>b.classList.remove('active'));
+  optIzin.classList.add('active');
+  labelReason.style.display='block'; reasonInput.style.display='block';
+});
+
+cancelModal.addEventListener('click', ()=>{ modalBackdrop.style.display='none'; currentDetection = null; });
+confirmModal.addEventListener('click', ()=>{
+  if(!currentDetection) return;
+  const status = optHadir.classList.contains('active') ? 'Hadir' : (optSakit.classList.contains('active') ? 'Sakit' : 'Izin');
+  const reason = (status === 'Izin') ? (reasonInput.value.trim() || '') : '';
+  saveRecord(currentDetection.qr, currentDetection.device, status, reason);
+  modalBackdrop.style.display='none';
+  currentDetection = null;
+});
+
+/* ===== save record ===== */
+function saveRecord(qr, device, status, reason){
+  const k = todayKey(qr);
+  const isDup = dailyKeys.has(k);
+  const rec = {
+    qr, timeISO: new Date().toISOString(), device: device || 'camera',
+    status, reason: reason || '',
+    nisn: studentsDB[qr] ? qr : (studentsDB[qr] ? qr : (Object.keys(studentsDB).includes(qr) ? qr : null)),
+    name: studentsDB[qr] || null,
+    duplicate: isDup
+  };
+  records.unshift(rec);
+  if(!isDup) dailyKeys.add(k);
+  // ui
+  lastText.textContent = rec.name ? `${rec.nisn} • ${rec.name}` : rec.qr;
+  lastMeta.textContent = `${rec.status} • ${humanTime(rec.timeISO)}`;
+  statusEl.textContent = isDup ? 'Duplikat' : 'Tersimpan';
+  // play sound + vibrate
+  try{ const ac = new (window.AudioContext||window.webkitAudioContext)(); const o = ac.createOscillator(); const g = ac.createGain(); o.type='sine'; o.frequency.value=880; g.gain.value=0.03; o.connect(g); g.connect(ac.destination); o.start(); setTimeout(()=>{o.stop();ac.close()},120); }catch(e){}
+  navigator.vibrate && navigator.vibrate(100);
+  saveState(); refreshUI();
+  // optional: auto post to server if checked
+  if(document.getElementById('autoPost').checked && !isDup){
+    // attempt to POST to /absen (change endpoint if needed)
+    fetch('/absen', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec)}).catch(()=>{});
+  }
+}
+
+/* ===== file upload fallback (image) ===== */
+fileInput.addEventListener('change', (e)=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  const img = new Image();
+  img.onload = ()=>{
+    proc.width = img.width; proc.height = img.height;
+    pctx.drawImage(img,0,0);
+    const imd = pctx.getImageData(0,0,proc.width,proc.height);
+    const code = jsQR(imd.data, imd.width, imd.height, { inversionAttempts: "attemptBoth" });
+    if(code){
+      onDetected(code.data.trim(), 'upload');
+    } else {
+      alert('QR tidak ditemukan pada gambar.');
+    }
+  };
+  img.src = URL.createObjectURL(f);
+});
+
+/* ===== UI: render history, stats, chart ===== */
+function refreshUI(){
+  // stats
+  const today = (new Date()).toDateString();
+  const todays = records.filter(r => new Date(r.timeISO).toDateString() === today);
+  statTotal.textContent = todays.length;
+  statUnique.textContent = new Set(todays.map(r=>r.qr)).size;
+
+  // history render (filter applied)
+  const f = filterInput.value.trim().toLowerCase();
+  const list = records.filter(r => {
+    if(!f) return true;
+    const sname = r.name || '';
+    return (r.qr && r.qr.toLowerCase().includes(f)) || (sname.toLowerCase().includes(f)) || (r.nisn && r.nisn.includes(f));
+  });
+  historyList.innerHTML = '';
+  if(list.length === 0){ historyList.innerHTML = '<div class="tiny" style="padding:8px;color:var(--muted)">Belum ada data</div>'; }
+  list.forEach((r, idx) => {
+    const div = document.createElement('div'); div.className='row';
+    div.innerHTML = `
+      <div style="max-width:68%">
+        <div style="font-weight:700">${r.name ? (r.nisn + ' • ' + r.name) : r.qr}</div>
+        <div class="tiny" style="margin-top:6px;color:var(--muted)">${r.status}${r.reason?(' • '+r.reason):''} • ${humanTime(r.timeISO)}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="margin-bottom:6px"><span class="badge">${r.duplicate ? 'Duplikat' : 'OK'}</span></div>
+        <div><button class="ghost tiny" onclick="copy('${encodeURIComponent(r.qr)}')">Salin</button></div>
+      </div>
+    `;
+    historyList.appendChild(div);
+  });
+
+  updateChart();
+}
+
+function copy(enc){ navigator.clipboard.writeText(decodeURIComponent(enc)).then(()=>alert('Tersalin ke clipboard')); }
+
+/* ===== export / persist controls ===== */
+exportCSV.addEventListener('click', ()=>{
+  if(records.length === 0){ alert('Belum ada data'); return; }
+  const csv = ['qr,nisn,name,status,reason,time,device,duplicate'];
+  records.slice().reverse().forEach(r=>{
+    csv.push([`"${r.qr.replace(/"/g,'""')}"`,`"${(r.nisn||'').replace(/"/g,'""')}"`,`"${(r.name||'').replace(/"/g,'""')}"`,`"${r.status}"`,`"${(r.reason||'').replace(/"/g,'""')}"`,`"${r.timeISO}"`,`"${(r.device||'')}"`, r.duplicate?1:0].join(','));
+  });
+  const blob = new Blob([csv.join('\n')], {type:'text/csv'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download='absensi_csv.csv'; a.click(); URL.revokeObjectURL(url);
+});
+
+downloadJson.addEventListener('click', ()=>{
+  const blob = new Blob([JSON.stringify(records, null, 2)], {type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='absensi_log.json'; a.click(); URL.revokeObjectURL(url);
+});
+
+clearAll.addEventListener('click', ()=>{
+  if(!confirm('Hapus semua riwayat?')) return;
+  records = []; dailyKeys.clear(); saveState(); refreshUI();
+});
+
+/* ===== chart ===== */
+const ctx = document.getElementById('chart').getContext('2d');
+const chart = new Chart(ctx, { type:'bar', data:{ labels:[], datasets:[{ label:'Hadir per hari', data:[], backgroundColor: function(ctx){ const i=ctx.dataIndex||0; const cols=['#64f2ff','#a87bff','#ff78b8','#ffd76b','#7effa3','#71b6ff','#ffd2a3']; return cols[i%cols.length]; } }] }, options:{ responsive:true, maintainAspectRatio:false, scales:{ y:{beginAtZero:true}} }});
+
+function updateChart(){
+  const days=[]; const counts=[];
+  for(let i=6;i>=0;i--){ const d=new Date(); d.setDate(d.getDate()-i); days.push(d.toDateString()); }
+  days.forEach(day=>{ counts.push(records.filter(r => new Date(r.timeISO).toDateString() === day && r.status === 'Hadir').length); });
+  chart.data.labels = days.map(d => (new Date(d)).toLocaleDateString());
+  chart.data.datasets[0].data = counts;
+  chart.update();
+}
+
+/* ===== when detection triggers directly without modal (optional) ===== */
+// Not used — we use modal to select status
+
+/* ===== keyboard helpers and small UX ===== */
+document.addEventListener('keydown', e=>{
+  if(e.key === ' '){ e.preventDefault(); /* space = manual add disabled */ }
+});
+
+/* ===== start/stop events ===== */
+startBtn.addEventListener('click', async ()=>{
+  await listCameras();
+  const id = cameraSelect.value || null;
+  await startCamera(id);
+});
+stopBtn.addEventListener('click', ()=> stopCamera());
+cameraSelect.addEventListener('change', ()=> { const id = cameraSelect.value; if(id) startCamera(id); });
+
+filterInput.addEventListener('input', ()=> refreshUI());
+
+/* ===== on page load: restore state, list cams, init chart ===== */
+(async ()=>{
+  await listCameras();
+  try{ const p = await navigator.permissions.query({name:'camera'}); if(p && p.state === 'granted' && cameraSelect.value) startCamera(cameraSelect.value); }catch(e){}
+  refreshUI();
+})();
+
+/* ===== small background particles (canvas) ===== */
+(function bg(){
+  const c = document.getElementById('bgCanvas'); const g=c.getContext('2d');
+  let w=c.width=innerWidth, h=c.height=innerHeight;
+  window.addEventListener('resize', ()=>{ w=c.width=innerWidth; h=c.height=innerHeight; initStars(); });
+  const stars=[]; function rnd(a,b){return Math.random()*(b-a)+a;}
+  function initStars(){ stars.length=0; const cnt = Math.max(140, Math.floor((w*h)/9000)); for(let i=0;i<cnt;i++){ stars.push({x:Math.random()*w,y:Math.random()*h,r:rnd(0.4,1.6),hue:rnd(180,330),a:rnd(0.2,0.9),vx:rnd(-0.2,0.2),vy:rnd(-0.2,0.2)}); } }
+  function draw(){
+    g.clearRect(0,0,w,h);
+    // soft nebula
+    const grad = g.createRadialGradient(w*0.15,h*0.12,10,w*0.85,h*0.9,Math.max(w,h)); grad.addColorStop(0,'rgba(100,242,255,0.04)'); grad.addColorStop(0.4,'rgba(168,123,255,0.03)'); grad.addColorStop(1,'rgba(255,120,184,0.01)');
+    g.fillStyle = grad; g.fillRect(0,0,w,h);
+    for(const s of stars){
+      s.x+=s.vx; s.y+=s.vy; s.a += (Math.random()-0.5)*0.02; s.a=Math.max(0.1,Math.min(1,s.a));
+      if(s.x<0) s.x=w; if(s.x>w) s.x=0; if(s.y<0) s.y=h; if(s.y>h) s.y=0;
+      g.beginPath(); g.fillStyle = `hsla(${s.hue},80%,65%,${s.a})`; g.arc(s.x,s.y,s.r,0,Math.PI*2); g.fill();
+    }
+    requestAnimationFrame(draw);
+  }
+  initStars(); draw();
+})();
+
+</script>
+</body>
+</html>
